@@ -1,0 +1,793 @@
+
+# <b> Electrical Grid Stability Simulated Data</b>
+The local stability analysis of the 4-node star system (electricity producer is in the center) implementing Decentral Smart Grid Control concept.
+
+Link to dataset - https://archive.ics.uci.edu/dataset/471/electrical+grid+stability+simulated+data
+
+### Attribute Information
+
+There are 11 predictive attributes, 1 non-predictive attribute (p1), and 2 goal fields in the dataset. Here is a description of each attribute:
+
+1. tau[x]: This attribute represents the reaction time of the participant. It is a real value ranging from 0.5 to 10 seconds. Tau1 specifically pertains to the reaction time of the electricity producer.
+
+2. p[x]: This attribute indicates the nominal power consumed (if negative) or produced (if positive). It is a real value within the range of -0.5 to -2 seconds^-2. The value of p1 is the absolute sum of p2, p3, and p4.
+
+3. g[x]: This attribute represents a coefficient (gamma) that is proportional to price elasticity. It is a real value ranging from 0.05 to 1 seconds^-1. The value of g1 corresponds to the coefficient for the electricity producer.
+
+4. stab: This attribute denotes the maximal real part of the characteristic equation root. If the value is positive, it indicates that the system is linearly unstable. It is a real value.
+
+5. stabf: This attribute is the stability label of the system and is categorical, having two values: "stable" and "unstable". It indicates the stability status of the system.
+
+These attributes provide information about the reaction time, power consumption/production, price elasticity, and stability characteristics of the system under study.
+
+import pandas as pd
+import numpy as np
+%matplotlib inline
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from xgboost import XGBClassifier
+from sklearn.svm import LinearSVC
+from sklearn.svm import SVC
+from sklearn.metrics import (accuracy_score, precision_score,
+                             recall_score, f1_score, confusion_matrix)
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings("ignore")
+
+import tensorflow as tf
+from tensorflow.keras.layers import InputLayer, Dense, BatchNormalization
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+from scipy import stats
+from scipy.special import boxcox1p
+from sklearn.model_selection import train_test_split
+from sklearn import tree
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import BaggingClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn import metrics
+from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.ensemble import (
+    AdaBoostClassifier,
+    GradientBoostingClassifier,
+    RandomForestClassifier,
+    BaggingClassifier,
+)
+from xgboost import XGBClassifier
+from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import RandomUnderSampler
+from sklearn.metrics import accuracy_score,precision_score,recall_score,f1_score, roc_auc_score, roc_curve, auc, make_scorer
+import scipy.stats as stats
+import warnings
+warnings.filterwarnings('ignore')
+
+
+
+data = pd.read_csv("Data_for_UCI_named.csv")
+
+data.head()
+
+data.info()
+
+data.describe()
+
+Observations
+
+The dataset consists of 10,000 samples with 13 features. The summary statistics obtained from the `describe()` function reveal valuable insights into the data. The mean values for the `tau1`, `tau2`, `tau3`, and `tau4` features are observed to be very close, indicating a relatively balanced distribution. Similarly, the mean values for the `p1`, `p2`, `p3`, and `p4` features are also very close. The standard deviations for all the features vary, with the `stab` feature having the highest value of 0.036919. The minimum and maximum values for the features vary across different ranges, with the `stab` feature having a minimum value of -0.080760 and a maximum value of 0.109403. From the 25th percentile to the 75th percentile, the interquartile range for each feature is observed to be relatively small. Overall, the statistical summary of the dataset provides essential information on the range, central tendency, and variability of the features, which can guide further analysis and modeling in the research project.
+
+data.isnull().sum()
+
+- There are no null values in the data
+
+def assessment(f_data, f_y_feature, f_x_feature, f_index=-1):
+    """
+    Develops and displays a histogram and a scatter plot for a dependent / independent variable pair from
+    a dataframe and, optionally, highlights a specific observation on the plot in a different color (red).
+
+    Also optionally, if an independent feature is not informed, the scatterplot is not displayed.
+
+    Keyword arguments:
+
+    f_data      Tensor containing the dependent / independent variable pair.
+                Pandas dataframe
+    f_y_feature Dependent variable designation.
+                String
+    f_x_feature Independent variable designation.
+                String
+    f_index     If greater or equal to zero, the observation denoted by f_index will be plotted in red.
+                Integer
+    """
+    for f_row in f_data:
+        if f_index >= 0:
+            f_color = np.where(f_data[f_row].index == f_index,'r','g')
+            f_hue = None
+        else:
+            f_color = 'b'
+            f_hue = None
+
+    f_fig, f_a = plt.subplots(1, 2, figsize=(16,4))
+
+    f_chart1 = sns.distplot(f_data[f_x_feature], ax=f_a[0], kde=False, color='g')
+    f_chart1.set_xlabel(f_x_feature,fontsize=10)
+
+    if f_index >= 0:
+        f_chart2 = plt.scatter(f_data[f_x_feature], f_data[f_y_feature], c=f_color, edgecolors='w')
+        f_chart2 = plt.xlabel(f_x_feature, fontsize=10)
+        f_chart2 = plt.ylabel(f_y_feature, fontsize=10)
+    else:
+        f_chart2 = sns.scatterplot(x=f_x_feature, y=f_y_feature, data=f_data, hue=f_hue, legend=False)
+        f_chart2.set_xlabel(f_x_feature,fontsize=10)
+        f_chart2.set_ylabel(f_y_feature,fontsize=10)
+
+    plt.show()
+
+
+
+
+def correlation_map(f_data, f_feature, f_number):
+    """
+    Develops and displays a heatmap plot referenced to a primary feature of a dataframe, highlighting
+    the correlation among the 'n' mostly correlated features of the dataframe.
+
+    Keyword arguments:
+
+    f_data      Tensor containing all relevant features, including the primary.
+                Pandas dataframe
+    f_feature   The primary feature.
+                String
+    f_number    The number of features most correlated to the primary feature.
+                Integer
+    """
+    f_most_correlated = f_data.corr().nlargest(f_number,f_feature)[f_feature].index
+    f_correlation = f_data[f_most_correlated].corr()
+
+    f_mask = np.zeros_like(f_correlation)
+    f_mask[np.triu_indices_from(f_mask)] = True
+    with sns.axes_style("white"):
+        f_fig, f_ax = plt.subplots(figsize=(20, 10))
+        sns.heatmap(f_correlation, mask=f_mask, vmin=-1, vmax=1, square=True,
+                    center=0, annot=True, annot_kws={"size": 8}, cmap="PRGn")
+    plt.show()
+
+
+map1 = {'unstable': 0, 'stable': 1}
+data['stabf'] = data['stabf'].replace(map1)
+
+data = data.sample(frac=1)
+
+for column in data.columns:
+    assessment(data, 'stab', column, -1)
+
+- It can observed that most of the features are normally distributed except P1 and stab which seem t have normal distribution and the feature stabf which has two classes and seem to be slightly imbalanced
+
+data.p1.skew()
+
+### Correlation plot
+
+It is crucial to examine the relationships between numerical features and the dependent variable, as well as potential collinearity among these features. The heatmap analysis presented below offers valuable insights into the correlations between the dependent variable, denoted as 'stabf', and the 12 numerical features. It is worth mentioning that the alternative dependent variable, labeled as 'stab', has been included to provide an indication of its correlation with 'stabf'. The observed correlation between 'stab' and 'stabf' is significant, measuring -0.83, which supports the prior decision to exclude 'stab' as anticipated in Section 3. Additionally, it is noted that the correlation between 'p1' and its components 'p2', 'p3', and 'p4' is higher than the average correlation but not substantial enough to warrant their removal.
+
+correlation_map(data, 'stabf', 14)
+
+corr = data.corr()
+ax = sns.heatmap(
+    corr,
+    vmin=-1, vmax=1, center=0,
+    cmap=sns.diverging_palette(20, 220, n=200),
+    square=True
+)
+ax.set_xticklabels(
+    ax.get_xticklabels(),
+    rotation=45,
+    horizontalalignment='right'
+);
+
+
+corrMatrix = data.corr()
+sns.heatmap(corrMatrix, annot=False)
+plt.show()
+
+!pip install autoviz
+
+from autoviz.AutoViz_Class import AutoViz_Class
+%matplotlib inline
+AV = AutoViz_Class()
+AV.AutoViz(filename='',dfte=data,depVar='stab',verbose=1,max_rows_analyzed=data.shape[0]
+               ,max_cols_analyzed=data.shape[1])
+
+# Univariate Analysis
+# Histogram for each feature
+data.hist(figsize=(12, 8))
+plt.tight_layout()
+plt.show()
+
+
+
+# Bivariate Analysis
+# Pairplot of numerical features
+numerical_features = ['tau1', 'tau2', 'tau3', 'tau4', 'p1', 'p2', 'p3', 'p4', 'g1', 'g2', 'g3', 'g4']
+sns.pairplot(data[numerical_features], diag_kind='kde')
+plt.show()
+
+
+
+# Boxplot of target feature 'stab'
+sns.boxplot(x='stabf', y='stab', data=data)
+plt.show()
+
+
+data[numerical_features + ['stab']].corr()
+
+
+# Correlation heatmap
+correlation_matrix = data[numerical_features + ['stab']].corr()
+plt.figure(figsize=(10, 10))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
+plt.show()
+
+
+It is observed that the correlation matrix provides insights into the relationships between different variables in the dataset. Each value in the matrix represents the correlation coefficient between two variables, ranging from -1 to 1.
+
+Analyzing the provided correlation matrix, the following observations can be made:
+
+- The diagonal elements represent the correlation of each variable with itself, which is always 1. For example, `tau1` has a perfect positive correlation of 1 with itself.
+- The off-diagonal elements indicate the correlation between pairs of variables. Positive values indicate a positive correlation, negative values indicate a negative correlation, and values close to 0 suggest a weak or no correlation.
+- Some notable observations:
+  - The `stab` variable shows moderate positive correlations with several other variables, including `tau1`, `tau2`, `tau3`, and `tau4`. This suggests that there is a relationship between these variables and the stability of the system.
+  - The `p1` variable has a negative correlation with `p2`, `p3`, and `p4`, indicating some level of negative association between these pressure variables.
+  - The `g3` variable shows a moderate positive correlation with `g2` and `stab`, suggesting a relationship between these variables.
+
+Overall, this correlation matrix provides valuable insights into the interdependencies and associations among the variables in the dataset. These observations can guide further analysis and modeling in the research project.
+
+data.corr()
+
+
+# Correlation matrix
+correlation_matrix = data.corr()
+plt.figure(figsize=(10, 10))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
+plt.title("Correlation Matrix")
+plt.show()
+
+
+The correlation matrix shows the pairwise correlations between different features in the dataset. Each cell in the matrix represents the correlation coefficient between two features. Here are the observations:
+
+1. Correlation between Features:
+   - The features tau1, tau2, tau3, tau4, p1, p2, p3, p4, g1, g2, g3, and g4 show a relatively low correlation with each other, as indicated by their correlation coefficients close to zero. This suggests that these features are not strongly linearly related to each other.
+
+   - The feature stab (stability) exhibits moderate positive correlations with tau1, tau2, tau3, tau4, g1, g2, g3, and g4, as indicated by their positive correlation coefficients. This suggests that there is some positive linear relationship between stability and these features.
+
+   - The feature stabf (stability flag) shows negative correlations with most of the features, including tau1, tau2, tau3, tau4, p1, p2, p3, p4, g1, g2, g3, and g4. This indicates that as these features increase, the stability flag tends to decrease, indicating a lower level of stability.
+
+2. Impact on Stability:
+   - The feature stab has the highest positive correlation with tau2, tau3, tau4, g1, g2, g3, and g4. This implies that changes in these features may have a greater impact on the stability of the system.
+
+   - The feature stabf, which represents the stability flag, shows negative correlations with all the features. This suggests that the stability flag is affected by multiple factors present in the dataset.
+
+It is observed that the stability of the system, as indicated by the feature stab, is influenced by several features such as tau1, tau2, tau3, tau4, g1, g2, g3, and g4. Additionally, the stability flag (stabf) shows negative correlations with most of the features, indicating their impact on determining the stability level. These observations provide insights into the relationships between the features and the stability of the system under study.
+
+
+# Boxplot of numerical features by 'stabf'
+numerical_features = ['tau1', 'tau2', 'tau3', 'tau4', 'p1', 'p2', 'p3', 'p4', 'g1', 'g2', 'g3', 'g4']
+for feature in numerical_features:
+    plt.figure(figsize=(6, 4))
+    sns.boxplot(x='stabf', y=feature, data=data)
+    plt.title(f"Boxplot of {feature} by stabf")
+    plt.show()
+
+
+From the boxplots, it can be observed that the tau features like tau1,tau2,tau3, and tau4 have higher values when the stabf is 0 or unstable and lower values at stability and the same can be observed for features like g1,g2 and g3. But the p1,p2,p3 and p4 features seem to have same mean values for both the classes.
+
+# Countplot of target feature 'stabf'
+sns.countplot(x='stabf', data=data)
+plt.title("Countplot of stabf")
+plt.show()
+
+
+From the above barplot, t can be observed that there are more instances of unstability than stability and this shows the presence of data imbalance too.
+
+# Violin plot of numerical features by 'stabf'
+numerical_features = ['tau1', 'tau2', 'tau3', 'tau4', 'p1', 'p2', 'p3', 'p4', 'g1', 'g2', 'g3', 'g4']
+for feature in numerical_features:
+    plt.figure(figsize=(8, 6))
+    sns.violinplot(x='stabf', y=feature, data=data)
+    plt.title(f"Violin Plot of {feature} by stabf")
+    plt.show()
+
+
+# Pairplot with hue based on 'stabf'
+sns.pairplot(data, hue='stabf', diag_kind='kde')
+plt.show()
+
+
+# Jointplot of two numerical features with regression line
+sns.jointplot(x='tau1', y='p1', data=data, kind='reg')
+plt.title("Jointplot of tau1 and p1")
+plt.show()
+
+
+# Swarm plot of numerical feature against target 'stab'
+sns.swarmplot(x='stab', y='tau1', data=data)
+plt.title("Swarm Plot of tau1 by stab")
+plt.show()
+
+
+data.head(1)
+
+data.stabf.value_counts()
+
+X = data.drop('stabf', axis=1)
+y = data['stabf']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=56)
+X_val, X_test, y_val, y_test = train_test_split(X_test, y_test, test_size=0.5, random_state = 156)
+
+X_train.shape, y_train.shape, X_test.shape, y_test.shape, X_val.shape, y_val.shape
+
+### PCA
+
+Principal Component Analysis (PCA) is a dimensionality reduction technique that is widely used in data analysis and machine learning. PCA aims to transform a dataset consisting of potentially correlated variables into a new set of uncorrelated variables called principal components. These principal components are linear combinations of the original variables and capture the maximum variance in the data.
+
+PCA is important in several ways. First, it helps in reducing the dimensionality of the data by identifying the most important features or components. This is particularly useful when dealing with high-dimensional datasets, as it can help simplify the analysis and visualization of the data. By reducing the number of dimensions, PCA can also help improve computational efficiency in subsequent machine learning algorithms.
+
+Second, PCA helps in identifying the underlying structure or patterns in the data. The principal components are ordered in terms of their ability to explain the variance in the data. The first principal component accounts for the highest variance, followed by the second, and so on. By analyzing the weights or loadings of the variables in each principal component, it is possible to gain insights into the most influential factors contributing to the overall variance in the data.
+
+Additionally, PCA can be used for data preprocessing and feature extraction. It can be applied to remove noise or redundant information in the data, enhance the signal-to-noise ratio, and improve the performance of subsequent machine learning algorithms. PCA is also useful for visualizing high-dimensional data in a lower-dimensional space, allowing for easier interpretation and understanding.
+
+In conclusion, PCA is an important technique in data analysis and machine learning as it enables dimensionality reduction, identifies underlying patterns in the data, and aids in data preprocessing and feature extraction. It offers benefits such as improved computational efficiency, simplified analysis, and enhanced interpretability of complex datasets.
+
+pca = PCA(n_components=2)
+x2d = pca.fit_transform(X)
+x2d_df = pd.DataFrame(x2d)
+
+plt.plot(x2d_df[0][y==1], x2d_df[1][y==1], 'b.', ms=0.6, label='stable')
+plt.plot(x2d_df[0][y==0], x2d_df[1][y==0], 'r.', ms=0.6, label='unstable')
+plt.legend(loc="upper left")
+plt.tight_layout()
+plt.show()
+
+- It can be observed that interpretiing the data by only lowering the dimensions to 2 dimensions is difficult as they seem to be highly clustered and looks like some noise in the data
+
+def draw_cm(y_true, y_pred):
+    cm = confusion_matrix(y_true, y_pred)
+    cm = pd.DataFrame(cm, index=['unstable', 'stable'], columns=['unstable', 'stable'])
+    cm_sns = sns.heatmap(cm, cmap="Blues", annot=True)
+    cm_sns.set_xlabel('predicted')
+    cm_sns.set_ylabel('actual')
+    plt.show()
+
+### Modelling
+
+#### Models with the Orginal. Data
+
+models = []  # Empty list to store all the models
+
+# Appending models into the list
+models.append(("Logistic regression", LogisticRegression(random_state=1)))
+models.append(("Bagging", BaggingClassifier(random_state=1)))
+models.append(("Random forest", RandomForestClassifier(random_state=1)))
+models.append(("GBM", GradientBoostingClassifier(random_state=1)))
+models.append(("Adaboost", AdaBoostClassifier(random_state=1)))
+models.append(("dtree", DecisionTreeClassifier(random_state=1)))
+
+
+print("\n" "Train-set Performance:" "\n")
+for name, model in models:
+    model.fit(X_train, y_train)
+    scores = recall_score(y_train, model.predict(X_train), average = "weighted")
+    print("{}: {}".format(name, scores))
+
+print("\n" "Val-set Performance:" "\n")
+
+for name, model in models:
+    model.fit(X_train, y_train)
+    scores_val = recall_score(y_val, model.predict(X_val), average = "weighted")
+    print("{}: {}".format(name, scores_val))
+
+print("\n" "Test-set Performance:" "\n")
+
+for name, model in models:
+    model.fit(X_train, y_train)
+    scores_test = recall_score(y_test, model.predict(X_test), average = "weighted")
+    print("{}: {}".format(name, scores_test))
+
+
+
+<b> Models with oversampled data
+
+print("Before Oversampling, counts of label '0': {}".format(sum(y_train == 0)))
+print("Before Oversampling, counts of label '1': {} \n".format(sum(y_train == 1)))
+sm = SMOTE(
+    sampling_strategy="auto", k_neighbors=5, random_state=1
+)  # Synthetic Minority Over Sampling Technique
+X_train_over, y_train_over = sm.fit_resample(X_train, y_train)
+
+
+print("Before Oversampling, counts of label '0': {}".format(sum(y_train_over == 0)))
+print("Before Oversampling, counts of label '1': {} \n".format(sum(y_train_over == 1)))
+
+print("After Oversampling, the shape of train_X: {}".format(X_train_over.shape))
+print("After Oversampling, the shape of train_y: {} \n".format(y_train_over.shape))
+
+<b> Training all models on the oversampled data
+
+models = []  # Empty list to store all the models
+
+# Appending models into the list
+models.append(("Logistic regression", LogisticRegression(random_state=1)))
+models.append(("Bagging", BaggingClassifier(random_state=1)))
+models.append(("Random forest", RandomForestClassifier(random_state=1)))
+models.append(("GBM", GradientBoostingClassifier(random_state=1)))
+models.append(("Adaboost", AdaBoostClassifier(random_state=1)))
+models.append(("dtree", DecisionTreeClassifier(random_state=1)))
+
+
+print("\n" "Train-set Performance:" "\n")
+for name, model in models:
+    model.fit(X_train_over, y_train_over)
+    scores = recall_score(y_train_over, model.predict(X_train_over), average = "weighted")
+    print("{}: {}".format(name, scores))
+
+print("\n" "Val-set Performance:" "\n")
+
+for name, model in models:
+    model.fit(X_train, y_train)
+    scores_val = recall_score(y_val, model.predict(X_val), average = "weighted")
+    print("{}: {}".format(name, scores_val))
+
+print("\n" "Test-set Performance:" "\n")
+
+for name, model in models:
+    model.fit(X_train_over, y_train_over)
+    scores = recall_score(y_test, model.predict(X_test), average = "weighted")
+    print("{}: {}".format(name, scores))
+
+### Models with undersampling of data
+
+rus = RandomUnderSampler(random_state=1)
+X_train_un, y_train_un = rus.fit_resample(X_train, y_train)
+
+print("Before Under Sampling, counts of label '0': {}".format(sum(y_train == 0)))
+print("Before Under Sampling, counts of label '1': {} \n".format(sum(y_train == 1)))
+
+print("After Under Sampling, counts of label '0': {}".format(sum(y_train_un == 0)))
+print("After Under Sampling, counts of label '1': {} \n".format(sum(y_train_un == 1)))
+
+print("After Under Sampling, the shape of train_X: {}".format(X_train_un.shape))
+print("After Under Sampling, the shape of train_y: {} \n".format(y_train_un.shape))
+
+<b> MOdels with undersampled data
+
+models = []  # Empty list to store all the models
+
+# Appending models into the list
+models.append(("Logistic regression", LogisticRegression(random_state=1)))
+models.append(("Bagging", BaggingClassifier(random_state=1)))
+models.append(("Random forest", RandomForestClassifier(random_state=1)))
+models.append(("GBM", GradientBoostingClassifier(random_state=1)))
+models.append(("Adaboost", AdaBoostClassifier(random_state=1)))
+models.append(("dtree", DecisionTreeClassifier(random_state=1)))
+
+
+print("\n" "Train-set Performance:" "\n")
+for name, model in models:
+    model.fit(X_train_un, y_train_un)
+    scores = recall_score(y_train_un, model.predict(X_train_un), average = "weighted")
+    print("{}: {}".format(name, scores))
+
+print("\n" "Val-set Performance:" "\n")
+
+for name, model in models:
+    model.fit(X_train, y_train)
+    scores_val = recall_score(y_val, model.predict(X_val), average = "weighted")
+    print("{}: {}".format(name, scores_val))
+
+print("\n" "Test-set Performance:" "\n")
+
+for name, model in models:
+    model.fit(X_train_un, y_train_un)
+    scores = recall_score(y_test, model.predict(X_test), average = "weighted")
+    print("{}: {}".format(name, scores))
+
+
+
+# defining a function to compute different metrics to check performance of a classification model built using sklearn
+def model_performance_classification_sklearn(model, predictors, target):
+    """
+    Function to compute different metrics to check classification model performance
+
+    model: classifier
+    predictors: independent variables
+    target: dependent variable
+    """
+
+    # predicting using the independent variables
+    pred = model.predict(predictors)
+
+    acc = accuracy_score(target, pred)  # to compute Accuracy
+    recall = recall_score(target, pred, average='weighted')  # to compute Recall
+    precision = precision_score(target, pred, average='weighted')  # to compute Precision
+    f1 = f1_score(target, pred, average='weighted')  # to compute F1-score
+
+    # creating a dataframe of metrics
+    df_perf = pd.DataFrame(
+        {"Accuracy": acc, "Recall": recall, "Precision": precision, "F1": f1,},
+        index=[0],
+    )
+
+    return df_perf
+def confusion_matrix_sklearn(model, predictors, target):
+    """
+    To plot the confusion_matrix with percentages
+
+    model: classifier
+    predictors: independent variables
+    target: dependent variable
+    """
+    y_pred = model.predict(predictors)
+    cm = confusion_matrix(target, y_pred)
+    labels = np.asarray(
+        [
+            ["{0:0.0f}".format(item) + "\n{0:.2%}".format(item / cm.flatten().sum())]
+            for item in cm.flatten()
+        ]
+    ).reshape(2, 2)
+
+    plt.figure(figsize=(6, 4))
+    sns.heatmap(cm, annot=labels, fmt="")
+    plt.ylabel("True label")
+    plt.xlabel("Predicted label")
+
+### Tuning Adaboost and Gradient Boosting
+
+<b> Tuning with undersampling of data
+
+# Hyperparameter tuning
+from sklearn.model_selection import RandomizedSearchCV
+
+# defining model
+Model = AdaBoostClassifier(random_state=1)
+
+# Parameter grid to pass in RandomSearchCV
+param_grid = {
+    "n_estimators": np.arange(10, 110, 10),
+    "learning_rate": [0.1, 0.01, 0.2, 0.05, 1],
+    "base_estimator": [
+        DecisionTreeClassifier(max_depth=1, random_state=1),
+        DecisionTreeClassifier(max_depth=2, random_state=1),
+        DecisionTreeClassifier(max_depth=3, random_state=1),
+    ],
+}
+
+# Type of scoring used to compare parameter combinations
+scorer = metrics.make_scorer(metrics.recall_score)
+
+#Calling RandomizedSearchCV
+randomized_cv = RandomizedSearchCV(estimator=Model, param_distributions=param_grid, n_jobs = -1, n_iter=50, scoring=scorer, cv=5, random_state=1)
+
+#Fitting parameters in RandomizedSearchCV
+randomized_cv.fit(X_train_un,y_train_un)
+
+print("Best parameters are {} with CV score={}:" .format(randomized_cv.best_params_,randomized_cv.best_score_))
+
+tuned_adb1 = AdaBoostClassifier(
+    random_state=1,
+    n_estimators=50,
+    learning_rate=0.01,
+    base_estimator=DecisionTreeClassifier(max_depth=1, random_state=1),
+)
+tuned_adb1.fit(X_train_un, y_train_un)
+
+# Checking model's performance on training set
+adb1_train = model_performance_classification_sklearn(
+    tuned_adb1, X_train_un, y_train_un
+)
+adb1_train
+
+# Checking model's performance on validation set
+adb1_val = model_performance_classification_sklearn(tuned_adb1, X_test, y_test)
+adb1_val
+
+<b> Tuning with Original data
+
+
+# defining model
+Model = AdaBoostClassifier(random_state=1)
+
+# Parameter grid to pass in RandomSearchCV
+param_grid = {
+    "n_estimators": np.arange(10, 110, 10),
+    "learning_rate": [0.1, 0.01, 0.2, 0.05, 1],
+    "base_estimator": [
+        DecisionTreeClassifier(max_depth=1, random_state=1),
+        DecisionTreeClassifier(max_depth=2, random_state=1),
+        DecisionTreeClassifier(max_depth=3, random_state=1),
+    ],
+}
+
+# Type of scoring used to compare parameter combinations
+scorer = metrics.make_scorer(metrics.recall_score)
+
+#Calling RandomizedSearchCV
+randomized_cv = RandomizedSearchCV(estimator=Model, param_distributions=param_grid, n_jobs = -1, n_iter=50, scoring=scorer, cv=5, random_state=1)
+
+#Fitting parameters in RandomizedSearchCV
+randomized_cv.fit(X_train,y_train)
+
+print("Best parameters are {} with CV score={}:" .format(randomized_cv.best_params_,randomized_cv.best_score_))
+
+tuned_adb2 = AdaBoostClassifier(
+    random_state=1,
+    n_estimators=50,
+    learning_rate=0.01,
+    base_estimator=DecisionTreeClassifier(max_depth=1, random_state=1),
+)
+tuned_adb2.fit(X_train, y_train)
+
+# Checking model's performance on training set
+adb2_train = model_performance_classification_sklearn(tuned_adb2, X_train, y_train)
+adb2_train
+
+# Checking model's performance on validation set
+adb2_val = model_performance_classification_sklearn(tuned_adb2, X_test, y_test)
+adb2_val
+
+### Tuning Gradient Boosting classifier
+
+<B> Tuning with undersampled data
+
+#Creating pipeline
+Model = GradientBoostingClassifier(random_state=1)
+
+#Parameter grid to pass in RandomSearchCV
+param_grid = {
+    "init": [AdaBoostClassifier(random_state=1),DecisionTreeClassifier(random_state=1)],
+    "n_estimators": np.arange(75,150,25),
+    "learning_rate": [0.1, 0.01, 0.2, 0.05, 1],
+    "subsample":[0.5,0.7,1],
+    "max_features":[0.5,0.7,1],
+}
+
+# Type of scoring used to compare parameter combinations
+scorer = metrics.make_scorer(metrics.recall_score)
+
+#Calling RandomizedSearchCV
+randomized_cv = RandomizedSearchCV(estimator=Model, param_distributions=param_grid, n_iter=50, scoring=scorer, cv=5, random_state=1, n_jobs = -1)
+
+#Fitting parameters in RandomizedSearchCV
+randomized_cv.fit(X_train_un,y_train_un)
+
+print("Best parameters are {} with CV score={}:" .format(randomized_cv.best_params_,randomized_cv.best_score_))
+
+tuned_gbm1 = GradientBoostingClassifier(
+    random_state=1,
+    subsample=0.5,
+    n_estimators=100,
+    max_features=0.7,
+    learning_rate=0.1,
+    init=AdaBoostClassifier(random_state=1),
+)
+tuned_gbm1.fit(X_train_un, y_train_un)
+
+# Checking model's performance on training set
+gbm1_train = model_performance_classification_sklearn(
+    tuned_gbm1, X_train_un, y_train_un
+)
+gbm1_train
+
+# Checking model's performance on validation set
+gbm1_val = model_performance_classification_sklearn(tuned_gbm1, X_test, y_test)
+gbm1_val
+
+<b> Tuning with Original Data
+
+#defining model
+Model = GradientBoostingClassifier(random_state=1)
+
+#Parameter grid to pass in RandomSearchCV
+param_grid = {
+    "init": [AdaBoostClassifier(random_state=1),DecisionTreeClassifier(random_state=1)],
+    "n_estimators": np.arange(75,150,25),
+    "learning_rate": [0.1, 0.01, 0.2, 0.05, 1],
+    "subsample":[0.5,0.7,1],
+    "max_features":[0.5,0.7,1],
+}
+
+# Type of scoring used to compare parameter combinations
+scorer = metrics.make_scorer(metrics.recall_score)
+
+#Calling RandomizedSearchCV
+randomized_cv = RandomizedSearchCV(estimator=Model, param_distributions=param_grid, n_iter=50, scoring=scorer, cv=5, random_state=1, n_jobs = -1)
+
+#Fitting parameters in RandomizedSearchCV
+randomized_cv.fit(X_train,y_train)
+
+print("Best parameters are {} with CV score={}:" .format(randomized_cv.best_params_,randomized_cv.best_score_))
+
+tuned_gbm2 = GradientBoostingClassifier(
+    random_state=1,
+    subsample=0.5,
+    n_estimators=100,
+    max_features=0.7,
+    learning_rate=0.1,
+    init=AdaBoostClassifier(random_state=1),
+)
+tuned_gbm2.fit(X_train, y_train)
+
+# Checking model's performance on training set
+gbm2_train = model_performance_classification_sklearn(tuned_gbm1, X_train, y_train)
+gbm2_train
+
+# Checking model's performance on validation set
+gbm2_val = model_performance_classification_sklearn(tuned_gbm1, X_test, y_test)
+gbm2_val
+
+# Checking model's performance on validation set
+gbm_test = model_performance_classification_sklearn(tuned_gbm1, X_test, y_test)
+gbm_test
+
+confusion_matrix_sklearn(tuned_gbm1, X_train, y_train)
+
+confusion_matrix_sklearn(tuned_gbm1, X_test, y_test)
+
+- It can beobserved that the tuned gbm is performing very well by correctly identifying the True positive and True negative values.
+
+### Model Performances comparison
+
+# training performance comparison
+
+models_train_comp_df = pd.concat(
+    [
+        gbm1_train.T,
+        gbm2_train.T,
+        adb1_train.T,
+        adb2_train.T,
+    ],
+    axis=1,
+)
+models_train_comp_df.columns = [
+    "Gradient boosting trained with Undersampled data",
+    "Gradient boosting trained with Original data",
+    "AdaBoost trained with Undersampled data",
+    "AdaBoost trained with Original data",
+]
+print("Training performance comparison:")
+models_train_comp_df
+
+# Validation performance comparison
+
+models_train_comp_df = pd.concat(
+    [gbm1_val.T, gbm2_val.T, adb1_val.T, adb2_val.T], axis=1,
+)
+models_train_comp_df.columns = [
+
+    "Gradient boosting trained with Undersampled data",
+    "Gradient boosting trained with Original data",
+    "AdaBoost trained with Undersampled data",
+    "AdaBoost trained with Original data",
+]
+print("Testing performance comparison:")
+models_train_comp_df
+
+In this testing performance comparison, various machine learning models were evaluated using different training approaches. The models assessed were Gradient Boosting trained with Undersampled data, Gradient Boosting trained with Original data, AdaBoost trained with Undersampled data, and AdaBoost trained with Original data. The evaluation metrics used for comparison were Accuracy, Recall, Precision, and F1 score.
+
+Across all the models and training approaches, the observed values for Accuracy, Recall, Precision, and F1 score were consistent, each measuring at approximately 0.999. This suggests a high level of overall performance and effectiveness in predicting the target variable.
+
+These results indicate that the different training approaches did not have a significant impact on the model performance. Both the Undersampled and Original data training approaches yielded similar performance across all the evaluated metrics. This suggests that the models were able to generalize well and maintain consistent predictive capabilities regardless of the training data used.
+
+As a research student, these findings suggest that for this specific scenario and dataset, both Gradient Boosting and AdaBoost performed exceptionally well, achieving near-perfect accuracy, recall, precision, and F1 score. These results provide confidence in the reliability and robustness of these models for predicting the target variable. Further analysis and experimentation may be conducted to investigate other aspects of model performance, such as scalability and generalizability, to ensure the suitability of these models for real-world applications.
+
